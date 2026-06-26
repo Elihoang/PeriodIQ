@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Kết nối đến PeriodIQ Backend đang chạy ở cổng 5115
 const api = axios.create({
-  baseURL: 'http://localhost:5115/api', 
+  baseURL: import.meta.env.VITE_API_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
