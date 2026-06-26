@@ -10,7 +10,7 @@ env:
 phases:
     # INSTALL: Cat dat dependencies
     install:
-        runtime-version:
+        runtime-versions:
             dotnet: 8.0
         commands:
             - echo "=== INSTALL PHASE ==="
