@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -6,6 +7,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 3: Định nghĩa Bộ Luật (Master Data)
 /// Bộ luật khoa học được thiết lập bởi Admin để Rule Engine dựa vào đó mà chạy.
 /// </summary>
+[DynamoDBTable("RuleDefinition")]
 public class RuleDefinition : BaseEntity
 {
     // Thể loại: VolumeRule, CnsConflictRule, ProgressionRule, DeloadRule

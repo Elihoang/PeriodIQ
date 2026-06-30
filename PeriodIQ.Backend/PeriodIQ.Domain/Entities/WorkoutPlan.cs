@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -7,6 +8,7 @@ namespace PeriodIQ.Domain.Entities;
 /// <summary>
 /// Bảng 7: Giáo án Chu Kỳ (Được sinh ra bởi Rule Engine)
 /// </summary>
+[DynamoDBTable("WorkoutPlan")]
 public class WorkoutPlan : BaseEntity
 {
     public string UserId { get; set; } = string.Empty;

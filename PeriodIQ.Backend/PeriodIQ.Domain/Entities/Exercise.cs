@@ -1,3 +1,4 @@
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -6,6 +7,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 1: Danh mục Bài tập chuẩn khoa học (Master Data)
 /// Chứa thông tin về các bài tập cơ bản, nhóm cơ, và mức độ gây mỏi thần kinh.
 /// </summary>
+[DynamoDBTable("Exercise")]
 public class Exercise : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
