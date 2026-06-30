@@ -1,3 +1,6 @@
+using Amazon;
+using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.DataModel;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -50,11 +53,15 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-/* TẠM THỜI TẮT DYNAMODB
-var dynamoDbConfig = new AmazonDynamoDBConfig();
-var dynamoDbClient = new AmazonDynamoDBClient(dynamoDbConfig);
+var awsRegion = builder.Configuration["AWS:Region"] ?? "ap-southeast-1";
+var dynamoDbClient = new AmazonDynamoDBClient(new AmazonDynamoDBConfig
+{
+    RegionEndpoint = RegionEndpoint.GetBySystemName(awsRegion)
+});
 builder.Services.AddSingleton<IAmazonDynamoDB>(dynamoDbClient);
-builder.Services.AddSingleton<IDynamoDBContext, DynamoDBContext>();
+builder.Services.AddSingleton<IDynamoDBContext>(
+    new DynamoDBContextBuilder().WithDynamoDBClient(() => dynamoDbClient).Build()
+);
 
 builder.Services.AddScoped<IExerciseRepository, ExerciseRepository>();
 builder.Services.AddScoped<IWorkoutTemplateRepository, WorkoutTemplateRepository>();
@@ -64,16 +71,6 @@ builder.Services.AddScoped<IPersonalRecordHistoryRepository, PersonalRecordHisto
 builder.Services.AddScoped<IDailyCnsStatusRepository, DailyCnsStatusRepository>();
 builder.Services.AddScoped<IWorkoutPlanRepository, WorkoutPlanRepository>();
 builder.Services.AddScoped<IWorkoutSessionLogRepository, WorkoutSessionLogRepository>();
-*/
-
-builder.Services.AddSingleton<IExerciseRepository, InMemoryExerciseRepository>();
-builder.Services.AddSingleton<IWorkoutTemplateRepository, InMemoryWorkoutTemplateRepository>();
-builder.Services.AddSingleton<IRuleDefinitionRepository, InMemoryRuleDefinitionRepository>();
-builder.Services.AddSingleton<IUserProfileRepository, InMemoryUserProfileRepository>();
-builder.Services.AddSingleton<IPersonalRecordHistoryRepository, InMemoryPersonalRecordHistoryRepository>();
-builder.Services.AddSingleton<IDailyCnsStatusRepository, InMemoryDailyCnsStatusRepository>();
-builder.Services.AddSingleton<IWorkoutPlanRepository, InMemoryWorkoutPlanRepository>();
-builder.Services.AddSingleton<IWorkoutSessionLogRepository, InMemoryWorkoutSessionLogRepository>();
 
 builder.Services.AddScoped<IMessageQueueService, SqsMessageQueueService>();
 

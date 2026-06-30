@@ -1,4 +1,5 @@
 using System;
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -7,6 +8,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 4: Hồ sơ người dùng
 /// Chứa thông tin cá nhân và thể trạng cơ bản.
 /// </summary>
+[DynamoDBTable("UserProfile")]
 public class UserProfile : BaseEntity
 {
     public string Email { get; set; } = string.Empty;

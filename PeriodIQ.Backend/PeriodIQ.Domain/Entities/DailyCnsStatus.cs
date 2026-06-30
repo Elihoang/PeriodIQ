@@ -1,4 +1,5 @@
 using System;
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -7,6 +8,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 6: Trạng thái Phục hồi Hằng ngày của User
 /// Dùng để đo lường mỏi thần kinh (CNS Fatigue). Rule Engine sẽ dựa vào đây để chủ động giảm tạ (Deload) nếu cần.
 /// </summary>
+[DynamoDBTable("DailyCnsStatus")]
 public class DailyCnsStatus : BaseEntity
 {
     public string UserId { get; set; } = string.Empty;

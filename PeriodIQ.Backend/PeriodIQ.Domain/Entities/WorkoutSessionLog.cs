@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -8,6 +9,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 8: Nhật ký Thực tập (Tracking)
 /// Dữ liệu do User nhập vào sau buổi tập thực tế. Dùng để đối chiếu với WorkoutPlan dự kiến.
 /// </summary>
+[DynamoDBTable("WorkoutSessionLog")]
 public class WorkoutSessionLog : BaseEntity
 {
     public string UserId { get; set; } = string.Empty;

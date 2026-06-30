@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -7,6 +8,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 2: Mẫu giáo án khung (Master Data)
 /// Do Admin hoặc Coach định nghĩa để Rule Engine dựa vào đó fill tạ và số rep.
 /// </summary>
+[DynamoDBTable("WorkoutTemplate")]
 public class WorkoutTemplate : BaseEntity
 {
     public string TemplateName { get; set; } = string.Empty; // Push/Pull/Legs 6 Days, Upper/Lower 4 Days

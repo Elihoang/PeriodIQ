@@ -1,4 +1,5 @@
 using System;
+using Amazon.DynamoDBv2.DataModel;
 using PeriodIQ.Domain.Common;
 
 namespace PeriodIQ.Domain.Entities;
@@ -7,6 +8,7 @@ namespace PeriodIQ.Domain.Entities;
 /// Bảng 5: Lịch sử Kỷ lục cá nhân (Personal Record)
 /// Lưu lại mức tạ tối đa (Max Lift) qua từng thời điểm. Rule Engine bắt buộc cần bảng này để chia % tạ.
 /// </summary>
+[DynamoDBTable("PersonalRecordHistory")]
 public class PersonalRecordHistory : BaseEntity
 {
     public string UserId { get; set; } = string.Empty;
