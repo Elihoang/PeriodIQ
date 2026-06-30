@@ -1,11 +1,13 @@
-#dinh nghia toan bo tai nguyen aws cho project
 AWSTemplateFormatVersion: "2010-09-09"
 
 Transform: AWS::Serverless-2016-10-31
 
-Description: PeriodIQ - SAM template dinh nghia lambda API, API Gateway, DynamoDB, SQS, S3, CLOUDWATCH
+Description: >
+  PeriodIQ - Workout Periodization Planning Platform
+  Day du 16 dich vu AWS: WAF, CloudFront, S3, Cognito, API Gateway,
+  Lambda (API/Worker), DynamoDB, SQS, SNS/SES, CloudWatch
+  (CodePipeline/CodeBuild/CloudFormation nam o file cicd-pipeline.yml rieng)
 
-#parameters - cac bien co the thay doi khi deploy
 Parameters:
   Environment:
     Type: String
@@ -15,11 +17,16 @@ Parameters:
       - staging
       - production
     Description: "Moi truong deploy (dev/staging/production)"
-  #email nhan thong bao khi co alarm
+
   AlertEmail:
     Type: String
     Default: "syvan.claude@outlook.com"
     Description: "Email nhan thong bao CloudWatch Alarm (SNS)"
+
+  SesSenderEmail:
+    Type: String
+    Default: "noreply@periodiq.example.com"
+    Description: "Email gui giao an / nhac lich tap qua SES (phai verify truoc khi dung that)"
 
 Globals:
   Function:
@@ -32,19 +39,179 @@ Globals:
       Variables:
         ASPNETCORE_ENVIRONMENT: !Ref Environment
 
-#RESOURCES - dinh nghia tung tai nguyen aws
 Resources:
-  #1 lambda function - backend api
+
+  # ==========================================================================
+  # 1. COGNITO (Nguoi 1) - Xac thuc User & Admin
+  # ==========================================================================
+  PeriodIQUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "periodiq-users-${Environment}"
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+        - Name: name
+          Required: true
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      MfaConfiguration: "OFF"
+
+  PeriodIQUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "periodiq-spa-client-${Environment}"
+      UserPoolId: !Ref PeriodIQUserPool
+      GenerateSecret: false   # SPA frontend khong co secret
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+
+  AdminsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admins
+      UserPoolId: !Ref PeriodIQUserPool
+      Description: "Nhom Admin - co quyen quan tri he thong"
+
+  UsersGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Users
+      UserPoolId: !Ref PeriodIQUserPool
+      Description: "Nhom User thuong - nguoi tap gym"
+
+  # ==========================================================================
+  # 2. AWS WAF (Nguoi 1) - Chan SQL Injection, XSS, bot, rate limit
+  # LUU Y: Scope CLOUDFRONT bat buoc tao o region us-east-1
+  # ==========================================================================
+  PeriodIQWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "periodiq-waf-${Environment}"
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "periodiq-waf-${Environment}"
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSetMetric
+        - Name: AWSManagedRulesBotControlRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesBotControlRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BotControlMetric
+        - Name: RateLimitRule
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 2000   # 2000 requests / 5 phut / IP
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitMetric
+
+  # ==========================================================================
+  # 3. CLOUDFRONT (Nguoi 1) - CDN + dinh tuyen /api -> API Gateway
+  # ==========================================================================
+  FrontendOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "periodiq-oac-${Environment}"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  PeriodIQDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        WebACLId: !GetAtt PeriodIQWebAcl.Arn
+        Origins:
+          - Id: FrontendS3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !Ref FrontendOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: ApiGatewayOrigin
+            DomainName: !Sub "${PeriodIQHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: FrontendS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # Managed-CachingOptimized
+        CacheBehaviors:
+          - PathPattern: "/api/*"
+            TargetOriginId: ApiGatewayOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad   # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac   # Managed-AllViewerExceptHostHeader
+        CustomErrorResponses:
+          # SPA: route khong ton tai van tra ve index.html, de React Router xu ly
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  # ==========================================================================
+  # 4. LAMBDA · API HANDLER (Nguoi 2) - gop ca Rule Engine + Admin API
+  # (Chien luoc Monolithic Lambda - xem README muc "Cau truc du an")
+  # ==========================================================================
   PeriodIQApiFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "periodIq-api-${Environment}"
+      FunctionName: !Sub "periodiq-api-${Environment}"
       Handler: PeriodIQ.Api
       CodeUri: ./PeriodIQ.Backend/PeriodIQ.Api/
       Description: "PeriodIQ Backend API - Workout Periodization Platform"
       Environment:
         Variables:
           SQS_QUEUE_URL: !Ref WorkoutProcessingQueue
+          COGNITO_USER_POOL_ID: !Ref PeriodIQUserPool
+          COGNITO_CLIENT_ID: !Ref PeriodIQUserPoolClient
       Events:
         ApiEvent:
           Type: HttpApi
@@ -52,6 +219,14 @@ Resources:
             ApiId: !Ref PeriodIQHttpApi
             Path: /{proxy+}
             Method: ANY
+        HealthCheckEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref PeriodIQHttpApi
+            Path: /api/health
+            Method: GET
+            Auth:
+              Authorizer: NONE   # health check phai public, khong qua JWT
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ExerciseTable
@@ -77,13 +252,62 @@ Resources:
         Environment: !Ref Environment
     Metadata:
       BuildMethod: dotnet8
+      BuildProperties:
+        ProjectSubPath: PeriodIQ.Api/PeriodIQ.Api.csproj
 
-  #2. api gateway - http api v2
+  # ==========================================================================
+  # 5. LAMBDA · WORKER (Nguoi 3) - xu ly message tu SQS, gui email qua SES
+  # TODO Nguoi 3: tao project PeriodIQ.Worker/ (hoac doi CodeUri sang du an that)
+  # ==========================================================================
+  PeriodIQWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "periodiq-worker-${Environment}"
+      Handler: PeriodIQ.Worker
+      CodeUri: ./PeriodIQ.Backend/PeriodIQ.Worker/
+      Description: "Worker xu ly SQS message - SEND_PLAN_EMAIL, WORKOUT_REMINDER, PR_CONGRATULATION"
+      Environment:
+        Variables:
+          SES_SENDER_EMAIL: !Ref SesSenderEmail
+          WORKOUT_PLAN_TABLE: !Ref WorkoutPlanTable
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt WorkoutProcessingQueue.Arn
+            BatchSize: 5
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref WorkoutPlanTable
+        - SESCrudPolicy:
+            IdentityName: !Ref SesSenderEmail
+        - SQSPollerPolicy:
+            QueueName: !GetAtt WorkoutProcessingQueue.QueueName
+      Tags:
+        Project: PeriodIQ
+        Environment: !Ref Environment
+    Metadata:
+      BuildMethod: dotnet8
+      BuildProperties:
+        ProjectSubPath: PeriodIQ.Worker/PeriodIQ.Worker.csproj
+
+  # ==========================================================================
+  # 6. API GATEWAY - HTTP API + Cognito JWT Authorizer (Nguoi 4 + Nguoi 1)
+  # ==========================================================================
   PeriodIQHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: !Ref Environment
       Description: "PeriodIQ API Gateway"
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${PeriodIQUserPool}"
+              audience:
+                - !Ref PeriodIQUserPoolClient
+            IdentitySource: "$request.header.Authorization"
+        DefaultAuthorizer: CognitoAuthorizer
       CorsConfiguration:
         AllowOrigins:
           - "*"
@@ -100,9 +324,9 @@ Resources:
           - X-Api-Key
         MaxAge: 300
 
-  # 3 DynamoDB - 8 bang du lieu
-
-  #bang 1: Exercise (danh sach bai tap)
+  # ==========================================================================
+  # 7. DYNAMODB - 8 bang du lieu (Nguoi 4)
+  # ==========================================================================
   ExerciseTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -115,7 +339,6 @@ Resources:
         - AttributeName: Id
           KeyType: HASH
 
-  #bang 2: WorkoutTemplate (Mau lich tap)
   WorkoutTemplateTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -128,7 +351,6 @@ Resources:
         - AttributeName: Id
           KeyType: HASH
 
-  #bang 3: RuleDefinition (Quy tac Rule Engine)
   RuleDefinitionTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -141,7 +363,6 @@ Resources:
         - AttributeName: Id
           KeyType: HASH
 
-  #bang 4: UserProfile (ho so nguoi dung)
   UserProfileTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -163,7 +384,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  #bang 5: PersonalRecordHistory (lich su PR)
   PersonalRecordHistoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -189,7 +409,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  #bang 6: DailyCnsStatus (Trang thai CNS hang ngay)
   DailyCnsStatusTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -215,7 +434,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  #bang 7: WorkoutPlan (lich tap ca nhan hoa)
   WorkoutPlanTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -241,7 +459,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  #bang 8: WorkoutSessionLog (nhat ky buoi tap)
   WorkoutSessionLogTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -267,7 +484,9 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  # SQS queue - hang doi xu ly workout
+  # ==========================================================================
+  # 8. SQS (Nguoi 3) - hang doi xu ly workout (async)
+  # ==========================================================================
   WorkoutProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -278,28 +497,25 @@ Resources:
         deadLetterTargetArn: !GetAtt WorkoutProcessingDLQ.Arn
         maxReceiveCount: 3
 
-  # Dead Letter Queue - chua message bi loi (de debug)
   WorkoutProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "periodiq-workout-processing-dlq-${Environment}"
       MessageRetentionPeriod: 1209600
 
-  # S3 Bucket hosting frontend
+  # ==========================================================================
+  # 9. S3 (Nguoi 2) - hosting frontend, chi cho CloudFront doc qua OAC
+  # ==========================================================================
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "periodiq-frontend-${Environment}-${AWS::AccountId}"
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
 
-  # Policy cho phep public doc tat ca file trong S3 bucket
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -307,20 +523,25 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: PublicReadGetObject
+          - Sid: AllowCloudFrontServicePrincipal
             Effect: Allow
-            Principal: "*"
+            Principal:
+              Service: cloudfront.amazonaws.com
             Action: "s3:GetObject"
             Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${PeriodIQDistribution}"
 
-  # SNS Topic - kenh gui thong bao (CloudWatch Alarm -> Email)
+  # ==========================================================================
+  # 10. SNS / SES (Nguoi 3) - alert noi bo (SNS) + email user that (SES)
+  # ==========================================================================
   AlertSnsTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub "periodiq-alerts-${Environment}"
-      DisplayName: "PeriodIQ Alert"
+      DisplayName: "PeriodIQ Alerts"
 
-  # Subscription: gui email khi co alarm
   AlertEmailSubscription:
     Type: AWS::SNS::Subscription
     Properties:
@@ -328,16 +549,21 @@ Resources:
       Protocol: email
       Endpoint: !Ref AlertEmail
 
-  # CLOUDWATCH - Log Group, Metric Filter, Alarms
+  SesSenderIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SesSenderEmail
+      # Sau khi tao, phai vao SES Console bam link verify trong email truoc khi gui that
 
-  # Log Group: noi lambda ghi logs
+  # ==========================================================================
+  # 11. CLOUDWATCH (Nguoi 5) - Log Group, Metric Filter, Alarms
+  # ==========================================================================
   ApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/periodiq-api-${Environment}"
       RetentionInDays: 30
 
-  # Metric Filter: dem so loi 5xx tu log
   ApiErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -349,7 +575,6 @@ Resources:
           MetricValue: "1"
           DefaultValue: 0
 
-  # Metric Filter: dem so loi 4xx (client error)
   ApiClientErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -361,12 +586,11 @@ Resources:
           MetricValue: "1"
           DefaultValue: 0
 
-  # Alarm: bao dong khi qua nhieu loi 5xx
   Api5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "periodiq-api-5xx-errors-${Environment}"
-      AlarmDescription: "CANH BAO: API tra ve qua nhieu loi 5xx"
+      AlarmDescription: "CANH BAO: API tra ve qua nhieu loi 5xx (>= 5 loi trong 5 phut)"
       Namespace: !Sub "PeriodIQ/${Environment}"
       MetricName: "Api5xxErrorCount"
       Statistic: Sum
@@ -378,12 +602,11 @@ Resources:
       AlarmActions:
         - !Ref AlertSnsTopic
 
-  # Alarm: lambda bi timeout hoac chay qua lau
   ApiLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub "periodiq-api-high-latency-${Environment}"
-      AlarmDescription: "CANH BAO: API response time qua cao"
+      AlarmDescription: "CANH BAO: API response time qua cao (> 10 giay trung binh trong 5 phut)"
       Namespace: "AWS/Lambda"
       MetricName: "Duration"
       Dimensions:
@@ -398,7 +621,6 @@ Resources:
       AlarmActions:
         - !Ref AlertSnsTopic
 
-  # Alarm: Lambda bi loi
   ApiInvocationErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -418,11 +640,29 @@ Resources:
       AlarmActions:
         - !Ref AlertSnsTopic
 
-  # Alarm: DLQ co message (message bi fail)
+  WorkerInvocationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "periodiq-worker-invocation-errors-${Environment}"
+      AlarmDescription: "CANH BAO: Lambda Worker bi loi khi xu ly SQS message"
+      Namespace: "AWS/Lambda"
+      MetricName: "Errors"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PeriodIQWorkerFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertSnsTopic
+
   DlqMessageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "periodiq-dlq-message-${Environment}"
+      AlarmName: !Sub "periodiq-dlq-messages-${Environment}"
       AlarmDescription: "CANH BAO: Co message bi loi trong Dead Letter Queue (can kiem tra)"
       Namespace: "AWS/SQS"
       MetricName: "ApproximateNumberOfMessagesVisible"
@@ -438,19 +678,30 @@ Resources:
       AlarmActions:
         - !Ref AlertSnsTopic
 
-#OUTPUT - Cac gia tri xuat ra sau khi deploy (URL, ARN, Ten resource)
 Outputs:
   ApiUrl:
     Description: "API Gateway endpoint URL"
     Value: !Sub "https://${PeriodIQHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
 
-  FrontendUrl:
-    Description: "Frontend S3 Website URL"
-    Value: !GetAtt FrontendBucket.WebsiteURL
+  CloudFrontDomainName:
+    Description: "CloudFront distribution domain (URL truy cap chinh cua frontend)"
+    Value: !GetAtt PeriodIQDistribution.DomainName
 
   FrontendBucketName:
-    Description: "S3 Bucket name cho frontend"
+    Description: "S3 Bucket name cho Frontend"
     Value: !Ref FrontendBucket
+
+  CognitoUserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref PeriodIQUserPool
+
+  CognitoUserPoolClientId:
+    Description: "Cognito User Pool Client ID (dung cho frontend SPA)"
+    Value: !Ref PeriodIQUserPoolClient
+
+  WafWebAclArn:
+    Description: "WAF WebACL ARN gan vao CloudFront"
+    Value: !GetAtt PeriodIQWebAcl.Arn
 
   SqsQueueUrl:
     Description: "SQS Queue URL cho workout processing"
@@ -461,9 +712,13 @@ Outputs:
     Value: !Ref AlertSnsTopic
 
   LambdaFunctionName:
-    Description: "Lambda function name"
+    Description: "Lambda API function name"
     Value: !Ref PeriodIQApiFunction
 
   LambdaFunctionArn:
-    Description: "Lambda function ARN"
+    Description: "Lambda API function ARN"
     Value: !GetAtt PeriodIQApiFunction.Arn
+
+  WorkerFunctionName:
+    Description: "Lambda Worker function name"
+    Value: !Ref PeriodIQWorkerFunction
