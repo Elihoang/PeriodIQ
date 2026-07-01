@@ -12,10 +12,10 @@ import {
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);   // { sub, email, name, ... }
-  const [groups, setGroups] = useState([]);     // Cognito groups, vd ['Admins']
-  const [isAuthenticated, setIsAuth] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);   // đang kiểm tra session lúc khởi động
+  const [user, setUser]               = useState(null);   // { sub, email, name, ... }
+  const [groups, setGroups]           = useState([]);     // Cognito groups, vd ['Admin']
+  const [isAuthenticated, setIsAuth]  = useState(false);
+  const [isLoading, setIsLoading]     = useState(true);   // đang kiểm tra session lúc khởi động
 
   // ─── Kiểm tra session khi app khởi động ───────────────────────────────────
   useEffect(() => {
