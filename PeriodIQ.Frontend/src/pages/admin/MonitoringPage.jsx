@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { RefreshCw, CheckCircle2, XCircle, Clock, Server, Globe, Cpu } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, Clock, Server, Globe, Cpu, Activity, Gauge } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { checkHealth, getHistory, computeUptime } from '@/services/healthService';
+import AreaChart from '@/components/charts/AreaChart';
+import DonutGauge from '@/components/charts/DonutGauge';
+import StatusStrip from '@/components/charts/StatusStrip';
 
 // Tham chiếu Globals.Function.MemorySize trong template.yml — health endpoint
 // hiện chưa trả về memory/region nên lấy từ cấu hình hạ tầng tĩnh + API URL.
@@ -29,6 +32,21 @@ export default function MonitoringPage() {
   const uptime = computeUptime(history);
 
   const isHealthy = record?.ok;
+
+  // Chuỗi latency của các lần check thành công gần nhất -> vẽ area chart.
+  const latencySeries = history
+    .filter((h) => h.ok && h.latencyMs != null)
+    .slice(-40)
+    .map((h) => ({ value: h.latencyMs, label: dayjs(h.timestamp).format('HH:mm:ss') }));
+  const okLatencies = latencySeries.map((p) => p.value);
+  const avgLatency = okLatencies.length
+    ? Math.round(okLatencies.reduce((a, b) => a + b, 0) / okLatencies.length)
+    : null;
+  const peakLatency = okLatencies.length ? Math.max(...okLatencies) : null;
+
+  const uptimeColor = uptime == null
+    ? 'text-muted-foreground'
+    : uptime >= 99 ? 'text-emerald-500' : uptime >= 95 ? 'text-amber-500' : 'text-red-500';
 
   return (
     <div className="space-y-6">
@@ -83,24 +101,20 @@ export default function MonitoringPage() {
           </CardContent>
         </Card>
 
-        {/* Uptime indicator */}
+        {/* Uptime gauge */}
         <Card>
           <CardHeader>
-            <CardTitle>Uptime</CardTitle>
+            <CardTitle className="flex items-center gap-1.5">
+              <Gauge className="h-3.5 w-3.5" /> Uptime
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="flex flex-col items-center gap-3">
             {uptime === null ? (
-              <p className="text-sm text-muted-foreground">Chưa có dữ liệu.</p>
+              <p className="py-8 text-sm text-muted-foreground">Chưa có dữ liệu.</p>
             ) : (
               <>
-                <p className="text-3xl font-bold">{uptime.toFixed(1)}%</p>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full ${uptime >= 99 ? 'bg-emerald-500' : uptime >= 95 ? 'bg-amber-500' : 'bg-red-500'}`}
-                    style={{ width: `${uptime}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
+                <DonutGauge value={uptime} colorClass={uptimeColor} sublabel="uptime" />
+                <p className="text-center text-xs text-muted-foreground">
                   Dựa trên {history.length} lần kiểm tra gần nhất (client-side)
                 </p>
               </>
@@ -137,6 +151,48 @@ export default function MonitoringPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Response time chart */}
+      <Card>
+        <CardHeader className="flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5" /> Response time (ms)
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">{latencySeries.length} lần kiểm tra thành công gần nhất</p>
+          </div>
+          <div className="flex gap-4 text-right text-xs">
+            <div>
+              <p className="text-muted-foreground">Trung bình</p>
+              <p className="text-base font-semibold tabular-nums text-foreground">{avgLatency ?? '—'} ms</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Cao nhất</p>
+              <p className="text-base font-semibold tabular-nums text-foreground">{peakLatency ?? '—'} ms</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <AreaChart data={latencySeries} unit=" ms" height={180} />
+        </CardContent>
+      </Card>
+
+      {/* Uptime history strip */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Lịch sử kiểm tra</CardTitle>
+          <p className="text-xs text-muted-foreground">Mỗi thanh là một lần health-check · xanh = OK, đỏ = lỗi</p>
+        </CardHeader>
+        <CardContent>
+          <StatusStrip history={history} />
+          {history.length > 0 && (
+            <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+              <span>{dayjs(history[Math.max(history.length - 60, 0)].timestamp).format('HH:mm:ss')}</span>
+              <span>{dayjs(history[history.length - 1].timestamp).format('HH:mm:ss')}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

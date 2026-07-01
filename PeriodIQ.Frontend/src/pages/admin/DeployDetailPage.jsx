@@ -72,27 +72,41 @@ export default function DeployDetailPage() {
             </CardContent>
           </Card>
 
-          {Array.isArray(deploy.stages) && deploy.stages.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Các stage</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {deploy.stages.map((stage) => (
-                  <div
-                    key={stage.name}
-                    className="flex items-center justify-between rounded-lg border border-border px-4 py-2 text-sm"
-                  >
-                    <span className="font-medium">{stage.name}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">{formatDuration(stage.durationSeconds)}</span>
-                      <Badge variant={getStatusVariant(stage.status)}>{STATUS_LABEL[stage.status] || stage.status}</Badge>
+          {Array.isArray(deploy.stages) && deploy.stages.length > 0 && (() => {
+            const maxStage = Math.max(...deploy.stages.map((s) => s.durationSeconds || 0), 1);
+            const stageColor = (status) =>
+              status === 'Succeeded' ? 'bg-emerald-500'
+                : status === 'Failed' || status === 'Stopped' ? 'bg-red-500'
+                : status === 'InProgress' ? 'bg-amber-500'
+                : 'bg-muted-foreground';
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Các stage</CardTitle>
+                  <p className="text-xs text-muted-foreground">Độ dài thanh thể hiện thời lượng tương đối giữa các stage</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {deploy.stages.map((stage) => (
+                    <div key={stage.name} className="rounded-lg border border-border px-4 py-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{stage.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="tabular-nums text-muted-foreground">{formatDuration(stage.durationSeconds)}</span>
+                          <Badge variant={getStatusVariant(stage.status)}>{STATUS_LABEL[stage.status] || stage.status}</Badge>
+                        </div>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full ${stageColor(stage.status)}`}
+                          style={{ width: `${Math.max(((stage.durationSeconds || 0) / maxStage) * 100, 2)}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Card>
             <CardHeader>
