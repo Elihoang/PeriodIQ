@@ -486,6 +486,10 @@ Developer push code
 
 ### Người 1 — Auth & User Profile (3 dịch vụ)
 
+> 📌 **Cập nhật 2026-07-01 (nâng .NET 10):**
+> - Backend đã nâng lên **.NET 10** → cần cài .NET 10 SDK trên máy (`dotnet-install.sh --channel 10.0`) mới build được.
+> - Package `Microsoft.AspNetCore.Authentication.JwtBearer` đã lên `10.0.0`. Cấu hình Cognito JWT trong `Program.cs` giữ nguyên.
+
 | Dịch vụ AWS | Vai trò |
 |-------------|---------|
 | **Amazon Cognito** | Setup User Pool, cấu hình JWT cho User + Admin |
@@ -562,6 +566,11 @@ Developer push code
 ---
 
 ### Người 2 — Rule Engine & Sinh giáo án (3 dịch vụ)
+
+> 📌 **Cập nhật 2026-07-01 (nâng .NET 10):**
+> - API Lambda (`PeriodIQApiFunction`) dùng custom runtime `provided.al2023` + `BuildMethod: dotnet10`. Cần .NET 10 SDK + `Amazon.Lambda.Tools` để `sam build`.
+> - `PeriodIQ.Api.csproj`: đã **gỡ** `Microsoft.AspNetCore.OpenApi` (bản 10.0 kéo `Microsoft.OpenApi` 2.0 làm vỡ Swashbuckle + dính lỗ hổng). Tài liệu API vẫn dùng **Swashbuckle + Scalar** — **đừng thêm lại** package đó trừ khi migrate hẳn sang `AddOpenApi()`.
+> - Đã sửa typo `<SelfContained>` trong csproj.
 
 | Dịch vụ AWS | Vai trò |
 |-------------|---------|
@@ -650,6 +659,11 @@ Developer push code
 
 ### Người 3 — Tiến trình & Async Notification (3 dịch vụ)
 
+> ⚠️ **Cập nhật 2026-07-01 — Worker đang bị COMMENT tạm:**
+> - Vì project `PeriodIQ.Backend/PeriodIQ.Worker/` **chưa tồn tại**, `sam build` sẽ fail, nên đã **comment tạm** 3 khối trong `template.yml` (đều đánh dấu `# TODO Nguoi 3`): resource `PeriodIQWorkerFunction`, alarm `WorkerInvocationErrorAlarm`, output `WorkerFunctionName`.
+> - **Việc cần làm:** tạo project `PeriodIQ.Worker` (target **`net10.0`**), rồi **bỏ comment** cả 3 khối đó.
+> - SQS queue `WorkoutProcessingQueue` vẫn hoạt động — Api vẫn gửi message, message nằm chờ tới khi Worker được bật lại.
+
 | Dịch vụ AWS | Vai trò |
 |-------------|---------|
 | **Amazon SQS** | Hàng đợi tác vụ bất đồng bộ |
@@ -725,6 +739,9 @@ Developer push code
 ---
 
 ### Người 4 — Admin Panel & Data (3 dịch vụ)
+
+> 📌 **Cập nhật 2026-07-01 (nâng .NET 10):**
+> - Backend controllers nâng lên **.NET 10** → cài .NET 10 SDK mới build được. 8 bảng DynamoDB giữ nguyên schema.
 
 | Dịch vụ AWS | Vai trò |
 |-------------|---------|
@@ -825,6 +842,13 @@ Developer push code
 ---
 
 ### Người 5 — CI/CD & Monitoring (4 dịch vụ)
+
+> 📌 **Cập nhật 2026-07-01 — Pipeline & .NET 10:**
+> - Repo đã **transfer vào org `PeriolIQ`**; CodeStar connection tạo ở region **`ap-southeast-1`**.
+> - `cicd-pipeline.yml`: `GitHubRepo` mặc định = `PeriolIQ/PeriodIQ`, pipeline chạy region **`ap-southeast-1`**; `samconfig.toml` cũng đổi sang `ap-southeast-1`.
+> - `buildspec-backend.yml`: sửa lỗi YAML (dấu `: ` trong `echo`) + cài **.NET 10 SDK** qua `dotnet-install.sh`. Stage **SamDeploy** cũng cài .NET 10 + `Amazon.Lambda.Tools`.
+> - `BuildMethod: dotnet10` (SAM CLI **không** hỗ trợ `dotnet9` — chỉ có 6/7/8/10).
+> - ⚠️ **Drift:** stack `periodiq-cicd-pipeline` từng bị xóa pipeline ngoài luồng (CFN vẫn tưởng còn) → phải `delete-stack` rồi `deploy` lại để tạo lại pipeline.
 
 | Dịch vụ AWS | Vai trò |
 |-------------|---------|
