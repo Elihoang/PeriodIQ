@@ -16,7 +16,7 @@ phases:
             - node --version
             - echo "Bat pnpm qua corepack..."
             - corepack enable
-            - corepack prepare pnpm@latest --activate
+            - corepack prepare pnpm@9 --activate
             - pnpm --version
             - pnpm config set store-dir "$PNPM_STORE_DIR"
             - echo "Cai dat packages bang pnpm..."
