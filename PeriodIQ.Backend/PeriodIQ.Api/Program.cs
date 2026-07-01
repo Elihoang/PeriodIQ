@@ -1,3 +1,6 @@
+using Amazon.CloudWatchLogs;
+using Amazon.CodeBuild;
+using Amazon.CodePipeline;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -93,6 +96,15 @@ builder.Services.AddSingleton<IDynamoDBContext>(
     new DynamoDBContextBuilder().WithDynamoDBClient(() => dynamoDbClient).Build()
 );
 
+// ─── CI/CD monitoring clients (CodePipeline / CodeBuild / CloudWatch Logs) ──
+var awsRegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(awsRegion);
+builder.Services.AddSingleton<IAmazonCodePipeline>(
+    new AmazonCodePipelineClient(new AmazonCodePipelineConfig { RegionEndpoint = awsRegionEndpoint }));
+builder.Services.AddSingleton<IAmazonCodeBuild>(
+    new AmazonCodeBuildClient(new AmazonCodeBuildConfig { RegionEndpoint = awsRegionEndpoint }));
+builder.Services.AddSingleton<IAmazonCloudWatchLogs>(
+    new AmazonCloudWatchLogsClient(new AmazonCloudWatchLogsConfig { RegionEndpoint = awsRegionEndpoint }));
+
 builder.Services.AddScoped<IExerciseRepository, ExerciseRepository>();
 builder.Services.AddScoped<IWorkoutTemplateRepository, WorkoutTemplateRepository>();
 builder.Services.AddScoped<IRuleDefinitionRepository, RuleDefinitionRepository>();
@@ -105,6 +117,7 @@ builder.Services.AddScoped<IWorkoutSessionLogRepository, WorkoutSessionLogReposi
 // ─── Services ─────────────────────────────────────────────────────────────
 
 builder.Services.AddScoped<IMessageQueueService, SqsMessageQueueService>();
+builder.Services.AddScoped<IDeploymentService, PeriodIQ.Infrastructure.Deployment.CodePipelineDeploymentService>();
 
 builder.Services.AddScoped<RuleEngineService>();
 builder.Services.AddScoped<WorkoutPlanService>();

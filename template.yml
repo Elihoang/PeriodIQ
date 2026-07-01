@@ -220,6 +220,8 @@ Resources:
           SQS_QUEUE_URL: !Ref WorkoutProcessingQueue
           COGNITO_USER_POOL_ID: !Ref PeriodIQUserPool
           COGNITO_CLIENT_ID: !Ref PeriodIQUserPoolClient
+          # Ten pipeline CI/CD (o stack cicd-pipeline.yml rieng) de Admin API doc lich su deploy
+          PIPELINE_NAME: !Sub "periodiq-pipeline-${Environment}"
       Events:
         ApiEvent:
           Type: HttpApi
@@ -257,6 +259,21 @@ Resources:
         - SQSSendMessagePolicy:
             QueueName: !GetAtt WorkoutProcessingQueue.QueueName
         - CloudWatchLogsFullAccess
+        # Quyen doc lich su CI/CD cho trang giam sat deploy cua Admin
+        - Statement:
+            - Sid: ReadCodePipelineHistory
+              Effect: Allow
+              Action:
+                - codepipeline:ListPipelineExecutions
+                - codepipeline:GetPipelineExecution
+                - codepipeline:ListActionExecutions
+              Resource:
+                - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:periodiq-pipeline-${Environment}"
+            - Sid: ReadCodeBuildForDeployLogs
+              Effect: Allow
+              Action:
+                - codebuild:BatchGetBuilds
+              Resource: "*"
       Tags:
         Project: PeriodIQ
         Environment: !Ref Environment
