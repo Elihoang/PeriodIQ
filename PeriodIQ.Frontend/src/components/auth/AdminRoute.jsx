@@ -2,7 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 /**
- * Bảo vệ route admin — yêu cầu đăng nhập VÀ thuộc Cognito group "Admins".
+ * Bảo vệ route admin — yêu cầu đăng nhập VÀ thuộc Cognito group "Admin".
  * Redirect về /login nếu chưa đăng nhập, về / nếu không có quyền admin.
  */
 export default function AdminRoute({ children }) {

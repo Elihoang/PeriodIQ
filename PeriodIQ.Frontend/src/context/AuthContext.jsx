@@ -13,7 +13,7 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser]               = useState(null);   // { sub, email, name, ... }
-  const [groups, setGroups]           = useState([]);     // Cognito groups, vd ['Admins']
+  const [groups, setGroups]           = useState([]);     // Cognito groups, vd ['Admin']
   const [isAuthenticated, setIsAuth]  = useState(false);
   const [isLoading, setIsLoading]     = useState(true);   // đang kiểm tra session lúc khởi động
 
@@ -60,7 +60,7 @@ export function AuthProvider({ children }) {
     setIsAuth(false);
   }, []);
 
-  const isAdmin = groups.includes('Admins');
+  const isAdmin = groups.includes('Admin');
 
   return (
     <AuthContext.Provider

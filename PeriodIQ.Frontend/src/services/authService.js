@@ -124,7 +124,7 @@ export function getIdToken() {
 }
 
 /**
- * Lấy danh sách Cognito Group (vd: "Admins") từ claim "cognito:groups"
+ * Lấy danh sách Cognito Group (vd: "Admin") từ claim "cognito:groups"
  * trong Id Token. Dùng để phân quyền trang /admin/*.
  */
 export function getUserGroups() {
