@@ -14,9 +14,8 @@ phases:
             - curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
             - chmod +x /tmp/dotnet-install.sh
             - /tmp/dotnet-install.sh --channel 10.0 --install-dir /root/.dotnet
-            - export PATH="/root/.dotnet:$PATH"
             - echo "Kiem tra .NET SDK version..."
-            - dotnet --version
+            - $DOTNET_ROOT/dotnet --version
             - echo "Kiem tra thu muc project..."
             - ls -la PeriodIQ.Backend/
 
@@ -24,9 +23,9 @@ phases:
         commands:
             - echo "=== PRE_BUILD PHASE ==="
             - echo "Restore NuGet package..."
-            - dotnet restore PeriodIQ.Backend/PeriodIQ.sln
+            - $DOTNET_ROOT/dotnet restore PeriodIQ.Backend/PeriodIQ.sln
             - echo "Restore thanh cong!"
-            - dotnet list PeriodIQ.Backend/PeriodIQ.sln package --vulnerable --include-transitive
+            - $DOTNET_ROOT/dotnet list PeriodIQ.Backend/PeriodIQ.sln package --vulnerable --include-transitive
 
     build:
         commands:
@@ -34,11 +33,11 @@ phases:
             - echo "Build solution..."
             - SHORT_SHA=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
             - 'echo "Version: build-${CODEBUILD_BUILD_NUMBER}-${SHORT_SHA}"'
-            - dotnet build PeriodIQ.Backend/PeriodIQ.sln --configuration Release --no-restore
+            - $DOTNET_ROOT/dotnet build PeriodIQ.Backend/PeriodIQ.sln --configuration Release --no-restore
             - echo "Chay unit tests..."
-            - dotnet test PeriodIQ.Backend/PeriodIQ.sln --configuration Release --no-build --logger trx --results-directory ./test-results --collect "XPlat Code Coverage"
+            - $DOTNET_ROOT/dotnet test PeriodIQ.Backend/PeriodIQ.sln --configuration Release --no-build --logger trx --results-directory ./test-results --collect "XPlat Code Coverage"
             - echo "Publish API project..."
-            - dotnet publish PeriodIQ.Backend/PeriodIQ.Api/PeriodIQ.Api.csproj --configuration Release --output ./publish --self-contained true --runtime linux-x64
+            - $DOTNET_ROOT/dotnet publish PeriodIQ.Backend/PeriodIQ.Api/PeriodIQ.Api.csproj --configuration Release --output ./publish --self-contained true --runtime linux-x64
             - echo "Build THANH CONG!"
 
     post_build:
