@@ -83,7 +83,7 @@ Resources:
   AdminsGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
-      GroupName: Admins
+      GroupName: Admin
       UserPoolId: !Ref PeriodIQUserPool
       Description: "Nhom Admin - co quyen quan tri he thong"
 
