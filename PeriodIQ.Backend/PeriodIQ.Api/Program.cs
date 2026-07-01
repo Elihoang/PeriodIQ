@@ -63,14 +63,11 @@ builder.Services
             // Cognito access token không chứa aud — tắt để dùng được cả access token & id token
             ValidateAudience         = false,
             ValidateLifetime         = true,
+            RoleClaimType            = "cognito:groups"
         };
     });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("AdminOnly", policy =>
-        policy.RequireClaim("cognito:groups", "Admin"));
-});
+builder.Services.AddAuthorization();
 
 // ─── DynamoDB ─────────────────────────────────────────────────────────────
 var awsRegion = builder.Configuration["AWS:Region"] ?? "ap-southeast-1";
