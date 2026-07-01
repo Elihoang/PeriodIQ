@@ -69,6 +69,15 @@ Resources:
                   - "iam:*"
                   - "logs:*"
                 Resource: "*"
+              # Quyen tao & ghi test report (buildspec-backend.yml co muc reports:)
+              - Effect: Allow
+                Action:
+                  - "codebuild:CreateReportGroup"
+                  - "codebuild:CreateReport"
+                  - "codebuild:UpdateReport"
+                  - "codebuild:BatchPutTestCases"
+                  - "codebuild:BatchPutCodeCoverages"
+                Resource: "*"
 
   # IAM Role cho CodePipeline
   CodePipelineServiceRole:
