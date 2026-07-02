@@ -272,7 +272,7 @@ export default function StageLogPanel({ stage, open = true, onOpenChange, now = 
           </>
         ) : (
           <div className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
-            Stage này không tạo build log (không dùng CodeBuild).
+            {stage.status === 'Pending' ? 'Stage chưa chạy.' : 'Stage này không tạo build log (không dùng CodeBuild).'}
           </div>
         )
       )}

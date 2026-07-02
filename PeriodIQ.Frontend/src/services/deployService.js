@@ -38,4 +38,5 @@ export const STATUS_LABEL = {
   Failed: 'Thất bại',
   InProgress: 'Đang chạy',
   Stopped: 'Đã dừng',
+  Pending: 'Chưa chạy',
 };

@@ -265,6 +265,7 @@ Resources:
             - Sid: ReadCodePipelineHistory
               Effect: Allow
               Action:
+                - codepipeline:GetPipeline
                 - codepipeline:ListPipelineExecutions
                 - codepipeline:GetPipelineExecution
                 - codepipeline:ListActionExecutions
