@@ -108,7 +108,8 @@ public class CodePipelineDeploymentService : IDeploymentService
 
         var actions = actionsRes.ActionExecutionDetails ?? new List<ActionExecutionDetail>();
 
-        var stages = actions
+        // Các stage đã có action execution (đã/đang chạy).
+        var executed = actions
             .GroupBy(a => a.StageName)
             .Select(g =>
             {
@@ -122,9 +123,28 @@ public class CodePipelineDeploymentService : IDeploymentService
                     DurationSeconds = ComputeDuration(start, end),
                 };
             })
-            // Giữ thứ tự theo thời gian bắt đầu (Source -> Build -> Deploy -> ...).
-            .OrderBy(s => actions.Where(a => a.StageName == s.Name).Min(a => a.StartTime))
             .ToList();
+
+        // Lấy ĐẦY ĐỦ thứ tự stage từ định nghĩa pipeline để hiển thị cả stage chưa chạy (Pending).
+        var stageOrder = await GetStageOrderAsync(ct);
+
+        List<DeployStage> stages;
+        if (stageOrder.Count > 0)
+        {
+            var byName = executed.ToDictionary(s => s.Name, StringComparer.Ordinal);
+            stages = stageOrder
+                .Select(name => byName.TryGetValue(name, out var s)
+                    ? s
+                    : new DeployStage { Name = name, Status = "Pending" })
+                .ToList();
+            // Phòng trường hợp có stage đã chạy nhưng không khớp tên trong định nghĩa.
+            stages.AddRange(executed.Where(e => !stageOrder.Contains(e.Name)));
+        }
+        else
+        {
+            // Không đọc được định nghĩa — quay về thứ tự theo thời gian bắt đầu.
+            stages = executed.OrderBy(s => s.StartTime ?? DateTime.MaxValue).ToList();
+        }
 
         var overallStart = actions.Count > 0 ? actions.Min(a => a.StartTime) : (DateTime?)null;
         var overallEnd = actions.Count > 0 ? actions.Max(a => a.LastUpdateTime) : (DateTime?)null;
@@ -180,6 +200,24 @@ public class CodePipelineDeploymentService : IDeploymentService
             Stages = stages,
             Logs = combined,
         };
+    }
+
+    /// <summary>Thứ tự đầy đủ các stage theo định nghĩa pipeline (kể cả stage chưa chạy). Rỗng nếu không đọc được.</summary>
+    private async Task<List<string>> GetStageOrderAsync(CancellationToken ct)
+    {
+        try
+        {
+            var res = await _pipeline.GetPipelineAsync(new GetPipelineRequest { Name = _pipelineName }, ct);
+            return res.Pipeline?.Stages?
+                .Select(s => s.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .ToList() ?? new List<string>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Không đọc được định nghĩa pipeline '{PipelineName}'.", _pipelineName);
+            return new List<string>();
+        }
     }
 
     /// <summary>Log của 1 build CodeBuild kèm metadata log stream (để tail realtime phía client nếu cần).</summary>
